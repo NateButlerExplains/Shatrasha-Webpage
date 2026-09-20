@@ -33,28 +33,66 @@ form.addEventListener('change', () => { document.querySelector('#inquiry-result'
 
 // All background motion has one visible control and honors reduced motion.
 const heroVideo = document.querySelector('#hero-video');
+heroVideo.defaultMuted = true;
+heroVideo.muted = true;
+heroVideo.playsInline = true;
 const motionButton = document.querySelector('#motion-toggle');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const reelDialog = document.querySelector('#reel-dialog');
 const reelPlayer = document.querySelector('#reel-player');
-let motionPaused = reducedMotion.matches;
+// Follow the device preference until the visitor makes an explicit choice.
+let motionPaused = null;
+let autoplayBlocked = false;
 let heroInView = true;
+let playRequest = 0;
 let lastReelTrigger;
+function shouldPauseMotion() {
+  return (motionPaused ?? reducedMotion.matches) || !heroInView || document.hidden || reelDialog.open;
+}
 function updateMotionLabel() {
-  motionButton.setAttribute('aria-pressed', String(motionPaused));
-  motionButton.setAttribute('aria-label', motionPaused ? 'Play background motion' : 'Pause background motion');
-  motionButton.querySelector('.motion-label').textContent = motionPaused ? 'Play motion' : 'Pause motion';
-  motionButton.querySelector('.motion-icon').textContent = motionPaused ? '▶' : 'Ⅱ';
+  const paused = shouldPauseMotion() || autoplayBlocked || heroVideo.paused;
+  document.body.classList.toggle('motion-paused', paused);
+  motionButton.setAttribute('aria-pressed', String(paused));
+  motionButton.setAttribute('aria-label', paused ? 'Play background motion' : 'Pause background motion');
+  motionButton.querySelector('.motion-label').textContent = paused ? 'Play motion' : 'Pause motion';
+  motionButton.querySelector('.motion-icon').textContent = paused ? '▶' : 'Ⅱ';
 }
 function applyMotion() {
-  const stop = motionPaused || !heroInView || document.hidden || reelDialog.open;
-  document.body.classList.toggle('motion-paused', stop);
+  const request = ++playRequest;
+  const stop = shouldPauseMotion();
+  // Native inline autoplay and play() work together; deliberate pauses disable both.
+  heroVideo.autoplay = !stop;
   if (stop) heroVideo.pause();
-  else heroVideo.play().catch(error => { if (error.name === 'AbortError' || !heroInView || document.hidden || reelDialog.open) return; motionPaused = true; document.body.classList.add('motion-paused'); updateMotionLabel(); });
+  else {
+    heroVideo.muted = true;
+    heroVideo.play().catch(error => {
+      if (request !== playRequest || shouldPauseMotion() || error.name === 'AbortError') return;
+      // A browser refusal is not a user pause. Allow a later readiness/restore retry.
+      autoplayBlocked = true;
+      updateMotionLabel();
+    });
+  }
   updateMotionLabel();
 }
-motionButton.addEventListener('click', () => { motionPaused = !motionPaused; applyMotion(); });
-reducedMotion.addEventListener('change', event => { motionPaused = event.matches; applyMotion(); });
+motionButton.addEventListener('click', () => {
+  motionPaused = !(motionPaused || autoplayBlocked || heroVideo.paused);
+  autoplayBlocked = false;
+  applyMotion();
+});
+heroVideo.addEventListener('playing', () => {
+  if (shouldPauseMotion()) { heroVideo.pause(); return; }
+  autoplayBlocked = false;
+  updateMotionLabel();
+});
+heroVideo.addEventListener('pause', updateMotionLabel);
+heroVideo.addEventListener('canplay', () => {
+  if (!shouldPauseMotion() && heroVideo.paused) applyMotion();
+});
+window.addEventListener('pageshow', applyMotion);
+reducedMotion.addEventListener('change', () => {
+  if (motionPaused !== true) motionPaused = null;
+  applyMotion();
+});
 document.addEventListener('visibilitychange', () => { if (document.hidden) reelPlayer.pause(); applyMotion(); });
 document.querySelectorAll('[data-open-reel]').forEach(trigger => trigger.addEventListener('click', () => {
   lastReelTrigger = trigger;

@@ -22,6 +22,7 @@ The form prepares an email draft addressed to `inquiries@butlerlegalservice.com`
 - The 23.023-second background edit is a muted 720p loop.
 - The 1080p reel includes speaker and contact lower thirds. This first version has no audio track.
 - The site includes a motion pause control and respects reduced-motion preferences.
+- The background video starts muted and inline on desktop and mobile when motion is permitted. Native autoplay is enabled after the device's motion preference is checked, with recovery on media readiness and page restoration. Deliberate pauses are preserved. If a browser or device setting blocks autoplay, the poster and Play motion control remain available.
 - Only the approved website and its necessary assets are published. Prior design variations and full-resolution event originals remain preserved separately.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for domain setup, [MEDIA.md](MEDIA.md) for media sources, and [SEO.md](SEO.md) for search and link-preview maintenance.
