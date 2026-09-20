@@ -18,17 +18,26 @@ The three website photographs above also have their orientation baked into the a
 
 The circular S icon, favicon, and Apple touch icon come from the approved Shatrasha brand kit. No SB or B monogram is used in these website assets.
 
-The real-footage reel combines selected intervals from these supplied original recordings, in timeline order:
+## Speaker reel with sound
 
-1. MVI_1704.MP4
-2. MVI_1703.MP4
-3. MVI_1700.MP4
-4. MVI_1394.MP4
-5. MVI_1392.MP4
-6. MVI_1507.MP4
-7. MVI_1518.MP4
-8. MVI_1457.MP4
+`docs/assets/shatrasha-speaker-reel-v1.mp4` is the owner-approved 60-second speaker reel, exported at 1920 × 1080, 30 fps, H.264 video with stereo AAC audio. It is optimized for web delivery and starts progressively. The player uses `preload="none"` and plays with sound after a visitor clicks or taps either reel button. Native controls allow muting, volume adjustment, seeking, and fullscreen. Opening the reel pauses the background video; closing it stops the reel and restores the visitor's background-motion preference.
 
-Runtime: 23.023 seconds. Frame rate: 30000/1001. Original landscape framing and real-time motion were preserved, with a modest global exposure/color adjustment. The downloadable 1080p edition includes informational lower thirds; the 720p hero loop has no overlaid titles. Both have no audio track.
+The source is the approved `Shatrasha-Speaker-Reel-Review-v1-1080p.mp4` retained outside this repository. The web export preserves its full 60-second edit and copies the approved AAC audio without re-encoding. The poster is a frame from that approved reel.
 
-Full original files and detailed edit records are retained outside this deployment repository.
+The original recordings used for picture are MVI_1643, MVI_1704, MVI_1699, MVI_1507, MVI_1703, MVI_1392, MVI_1394, MVI_1518, MVI_1700, MVI_1457, MVI_1701, MVI_1521, MVI_1705, MVI_1542, and MVI_1627. All show real supplied event footage; no generated people or audience were added.
+
+Three continuous original speech excerpts play at their natural rate:
+
+| Recording | Source interval | Reel start |
+| --- | --- | --- |
+| MVI_1643.MP4 | 4.10–10.88 seconds | 0.35 seconds |
+| MVI_1405.MP4 | 6.62–20.20 seconds | 24.00 seconds |
+| MVI_1627.MP4 | 2.72–5.20 seconds | 49.50 seconds |
+
+The original instrumental bed and transition sounds were synthesized locally for the reel. No borrowed song, stock audio samples, fabricated cheers, or synthetic voice were used. The visuals use the approved Shatrasha wordmark, charcoal, lime, and white palette.
+
+## Muted background motion
+
+`docs/assets/speaker-hero.mp4` remains the separate 23.023-second, 720p silent background loop. Its selected recordings are MVI_1704, MVI_1703, MVI_1700, MVI_1394, MVI_1392, MVI_1507, MVI_1518, and MVI_1457. The hero preserves its existing mute, inline autoplay, reduced-motion, visibility, and manual-pause behavior. It continues using `reel-poster.jpg`.
+
+Full originals and detailed edit records are retained outside this deployment repository.
