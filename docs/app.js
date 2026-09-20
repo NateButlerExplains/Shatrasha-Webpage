@@ -41,10 +41,14 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const reelDialog = document.querySelector('#reel-dialog');
 const reelPlayer = document.querySelector('#reel-player');
 // Follow the device preference until the visitor makes an explicit choice.
-let motionPaused = null;
+let motionPaused = heroVideo.earlyMotion?.detach() ?? null;
+delete heroVideo.earlyMotion;
 let autoplayBlocked = false;
 let heroInView = true;
 let playRequest = 0;
+let autoplayRetryTimer = null;
+let autoplayRetryAttempt = 0;
+const autoplayRetryDelays = [250, 750, 1500, 3000];
 let lastReelTrigger;
 function shouldPauseMotion() {
   return (motionPaused ?? reducedMotion.matches) || !heroInView || document.hidden || reelDialog.open;
@@ -57,19 +61,37 @@ function updateMotionLabel() {
   motionButton.querySelector('.motion-label').textContent = paused ? 'Play motion' : 'Pause motion';
   motionButton.querySelector('.motion-icon').textContent = paused ? '▶' : 'Ⅱ';
 }
+function cancelAutoplayRetry() {
+  clearTimeout(autoplayRetryTimer);
+  autoplayRetryTimer = null;
+}
+function queueAutoplayRetry() {
+  // Recover a temporary native pause without looping against a browser policy.
+  if (autoplayRetryTimer !== null || shouldPauseMotion() || !heroVideo.paused || heroVideo.error || autoplayRetryAttempt >= autoplayRetryDelays.length) return;
+  autoplayRetryTimer = setTimeout(() => {
+    autoplayRetryTimer = null;
+    if (!shouldPauseMotion() && heroVideo.paused) applyMotion();
+  }, autoplayRetryDelays[autoplayRetryAttempt++]);
+}
+function refreshMotion() {
+  cancelAutoplayRetry();
+  autoplayRetryAttempt = 0;
+  applyMotion();
+}
 function applyMotion() {
   const request = ++playRequest;
   const stop = shouldPauseMotion();
   // Native inline autoplay and play() work together; deliberate pauses disable both.
   heroVideo.autoplay = !stop;
-  if (stop) heroVideo.pause();
+  if (stop) { cancelAutoplayRetry(); heroVideo.pause(); }
   else {
     heroVideo.muted = true;
     heroVideo.play().catch(error => {
-      if (request !== playRequest || shouldPauseMotion() || error.name === 'AbortError') return;
+      if (request !== playRequest || shouldPauseMotion()) return;
       // A browser refusal is not a user pause. Allow a later readiness/restore retry.
-      autoplayBlocked = true;
+      autoplayBlocked = error.name !== 'AbortError';
       updateMotionLabel();
+      queueAutoplayRetry();
     });
   }
   updateMotionLabel();
@@ -77,23 +99,32 @@ function applyMotion() {
 motionButton.addEventListener('click', () => {
   motionPaused = !(motionPaused || autoplayBlocked || heroVideo.paused);
   autoplayBlocked = false;
-  applyMotion();
+  refreshMotion();
 });
 heroVideo.addEventListener('playing', () => {
   if (shouldPauseMotion()) { heroVideo.pause(); return; }
+  cancelAutoplayRetry();
   autoplayBlocked = false;
   updateMotionLabel();
 });
-heroVideo.addEventListener('pause', updateMotionLabel);
-heroVideo.addEventListener('canplay', () => {
-  if (!shouldPauseMotion() && heroVideo.paused) applyMotion();
+heroVideo.addEventListener('pause', () => {
+  updateMotionLabel();
+  queueAutoplayRetry();
 });
-window.addEventListener('pageshow', applyMotion);
+function resumeMotionWhenReady() {
+  if (!shouldPauseMotion() && heroVideo.paused) applyMotion();
+}
+heroVideo.addEventListener('loadeddata', resumeMotionWhenReady);
+heroVideo.addEventListener('canplay', resumeMotionWhenReady);
+window.addEventListener('pageshow', refreshMotion);
 reducedMotion.addEventListener('change', () => {
   if (motionPaused !== true) motionPaused = null;
-  applyMotion();
+  refreshMotion();
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) reelPlayer.pause(); applyMotion(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { reelPlayer.pause(); applyMotion(); }
+  else refreshMotion();
+});
 document.querySelectorAll('[data-open-reel]').forEach(trigger => trigger.addEventListener('click', () => {
   lastReelTrigger = trigger;
   reelDialog.showModal();
@@ -110,7 +141,7 @@ reelDialog.addEventListener('click', event => {
 reelDialog.addEventListener('close', () => {
   reelPlayer.pause();
   document.body.classList.remove('modal-open');
-  applyMotion();
+  refreshMotion();
   lastReelTrigger?.focus({preventScroll:true});
 });
 document.querySelector('#reel-inquire').addEventListener('click', () => {
@@ -118,4 +149,9 @@ document.querySelector('#reel-inquire').addEventListener('click', () => {
   document.querySelector('#inquire').scrollIntoView({behavior:reducedMotion.matches ? 'auto' : 'smooth'});
 });
 applyMotion();
-new IntersectionObserver(entries => { heroInView = entries[0].isIntersecting; applyMotion(); }, {threshold:0}).observe(document.querySelector('#home'));
+new IntersectionObserver(entries => {
+  const wasInView = heroInView;
+  heroInView = entries[0].isIntersecting;
+  if (heroInView && !wasInView) refreshMotion();
+  else applyMotion();
+}, {threshold:0}).observe(heroVideo);

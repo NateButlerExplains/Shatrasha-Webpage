@@ -79,7 +79,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap">
-  <link rel="stylesheet" href="styles.css"><script src="app.js?v=20260920-motion" defer></script>
+  <link rel="stylesheet" href="styles.css"><script src="app.js?v=20260920-native-motion-3" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -90,11 +90,60 @@
   </div></header>
   <main id="main">
     <section class="hero" id="home" aria-labelledby="hero-title">
-      <div class="hero-media" aria-hidden="true"><video id="hero-video" muted loop playsinline preload="auto" poster="assets/reel-poster.jpg"><source src="assets/speaker-hero.mp4" type="video/mp4"></video></div>
+      <div class="hero-media" aria-hidden="true"><video id="hero-video" muted loop playsinline webkit-playsinline preload="auto" poster="assets/reel-poster.jpg"><source src="assets/speaker-hero.mp4" type="video/mp4"></video></div>
       <div class="hero-shade"></div>
       <div class="container hero-content"><h1 id="hero-title"><span class="hero-identity">Shatrasha / Attorney &amp; Speaker</span>
         Big energy.<br>Real <em>understanding.</em></h1><p>Engaging talks and hands-on legal workshops that get people thinking, talking, and ready for what comes next.</p><div class="hero-actions"><a class="button" href="#inquire">Bring Shatrasha to your event <span aria-hidden="true">↗</span></a><button class="reel-trigger" data-open-reel aria-label="Play Shatrasha’s 60-second speaker reel with sound"><span class="play-circle" aria-hidden="true">▶</span> Watch the reel with sound</button></div></div>
       <div class="container hero-bottom"><div><span>EXPERTISE WITH A HUMAN TOUCH</span><p>Practical. Hands-on. Engaging.</p></div><button id="motion-toggle" aria-pressed="false" aria-label="Pause background motion"><span class="motion-icon" aria-hidden="true">Ⅱ</span><span class="motion-label">Pause motion</span></button></div>
+      <script>
+        // Start muted motion and its control before the deferred app arrives.
+        (() => {
+          const video = document.getElementById('hero-video');
+          const button = document.getElementById('motion-toggle');
+          const preference = matchMedia('(prefers-reduced-motion: reduce)');
+          let paused = null;
+          let active = true;
+          const shouldStop = () => (paused ?? preference.matches) || document.hidden;
+          const label = () => {
+            if (!active) return;
+            const stopped = shouldStop() || video.paused;
+            document.body.classList.toggle('motion-paused', stopped);
+            button.setAttribute('aria-pressed', String(stopped));
+            button.setAttribute('aria-label', stopped ? 'Play background motion' : 'Pause background motion');
+            button.querySelector('.motion-label').textContent = stopped ? 'Play motion' : 'Pause motion';
+            button.querySelector('.motion-icon').textContent = stopped ? '▶' : 'Ⅱ';
+          };
+          const apply = () => {
+            video.autoplay = !shouldStop();
+            if (video.autoplay) video.play().catch(label);
+            else video.pause();
+            label();
+          };
+          const toggle = () => { paused = !video.paused; apply(); };
+          const preferenceChanged = () => { if (paused !== true) paused = null; apply(); };
+          const playing = () => { if (shouldStop()) video.pause(); label(); };
+          button.addEventListener('click', toggle);
+          video.addEventListener('playing', playing);
+          video.addEventListener('pause', label);
+          preference.addEventListener('change', preferenceChanged);
+          document.addEventListener('visibilitychange', apply);
+          video.earlyMotion = {
+            detach() {
+              active = false;
+              button.removeEventListener('click', toggle);
+              video.removeEventListener('playing', playing);
+              video.removeEventListener('pause', label);
+              preference.removeEventListener('change', preferenceChanged);
+              document.removeEventListener('visibilitychange', apply);
+              return paused;
+            }
+          };
+          video.defaultMuted = true;
+          video.muted = true;
+          video.playsInline = true;
+          apply();
+        })();
+      </script>
     </section>
     <div class="energy-band" aria-label="Clear insights. Real conversation. Confident next steps."><div class="energy-track" aria-hidden="true"><span>CLEAR INSIGHTS</span><i>✳</i><span>REAL CONVERSATION</span><i>✳</i><span>CONFIDENT NEXT STEPS</span><i>✳</i><span>CLEAR INSIGHTS</span><i>✳</i><span>REAL CONVERSATION</span><i>✳</i><span>CONFIDENT NEXT STEPS</span><i>✳</i></div></div>
     <section class="section reel-intro" id="in-the-room"><div class="container"><div class="section-heading"><div><p class="eyebrow">MORE THAN A MOMENT AT THE MICROPHONE</p><h2>See Shatrasha.<br><em>Feel the energy.</em></h2></div><p>The energy draws people in. The practical insight gives them something to take away. See Shatrasha at work, turning legal education into a conversation.</p></div><div class="live-gallery"><div class="gallery-portrait"><img src="assets/speaker-original.jpg" alt="Shatrasha holding a microphone and engaging her audience during a speaking session" width="1122" height="2000" loading="lazy"><span>Make it clear.</span></div><button class="gallery-film" data-open-reel aria-label="Play Shatrasha’s 60-second speaker reel with sound"><img src="assets/reel-poster.jpg" alt="Shatrasha smiling at the podium during a live presentation" width="1920" height="1080" loading="lazy"><span class="gallery-film-label"><span class="play-circle" aria-hidden="true">▶</span><span>60 seconds. Sound on.<br><strong>The speaker reel.</strong></span></span></button><div class="gallery-portrait"><img src="assets/speaking-original.jpg" alt="Shatrasha speaking into a microphone in a gray jacket" width="1009" height="1800" loading="lazy"><span>Make it connect.</span></div></div></div></section>
