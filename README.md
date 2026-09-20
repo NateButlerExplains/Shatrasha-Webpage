@@ -1,4 +1,4 @@
-# Shatrasha Butler — speaking engagements
+# Shatrasha — speaking engagements
 
 The approved speaking homepage for **shatrasha.com**, featuring original event photography, a real-footage video hero, a branded speaker reel, speaking topics and an event inquiry form.
 
@@ -24,4 +24,4 @@ The form prepares an email draft addressed to `inquiries@butlerlegalservice.com`
 - The site includes a motion pause control and respects reduced-motion preferences.
 - Only the approved website and its necessary assets are published. Prior design variations and full-resolution event originals remain preserved separately.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for domain setup and [MEDIA.md](MEDIA.md) for the source clip list.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for domain setup, [MEDIA.md](MEDIA.md) for media sources, and [SEO.md](SEO.md) for search and link-preview maintenance.

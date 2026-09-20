@@ -10,6 +10,14 @@ Original event photographs supplied by the website owner:
 
 The photographs were resized for web delivery without generative changes.
 
+## Link preview and image orientation
+
+`docs/assets/shatrasha-speaker-social-v1.jpg` is the 1200 × 630 sharing card. It uses the owner's `IMG_1680.JPG`: Shatrasha in a gray blazer holding a microphone at a live event. The source was rotated according to its EXIF orientation, cropped, resized, and given a modest exposure/color adjustment. A charcoal fade, the approved Shatrasha wordmark, and the existing brand slogan complete the composition. The photograph retains its original facial, body, clothing, and venue details. An AI-generated layout study was considered but is not used in the published image.
+
+The three website photographs above also have their orientation baked into the actual pixels, rather than relying on EXIF metadata, so browsers and messaging previews display them upright. Metadata was stripped and JPEG compression optimized for web delivery.
+
+The circular S icon, favicon, and Apple touch icon come from the approved Shatrasha brand kit. No SB or B monogram is used in these website assets.
+
 The real-footage reel combines selected intervals from these supplied original recordings, in timeline order:
 
 1. MVI_1704.MP4
