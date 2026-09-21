@@ -31,105 +31,86 @@ document.querySelector('#copy-inquiry').addEventListener('click', async () => {
 form.addEventListener('input', () => { document.querySelector('#inquiry-result').hidden = true; });
 form.addEventListener('change', () => { document.querySelector('#inquiry-result').hidden = true; });
 
-// All background motion has one visible control and honors reduced motion.
+// Background motion: native muted autoplay, one visible control, first-touch fallback.
 const heroVideo = document.querySelector('#hero-video');
-heroVideo.defaultMuted = true;
-heroVideo.muted = true;
-heroVideo.playsInline = true;
 const motionButton = document.querySelector('#motion-toggle');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const reelDialog = document.querySelector('#reel-dialog');
 const reelPlayer = document.querySelector('#reel-player');
-// Follow the device preference until the visitor makes an explicit choice.
-let motionPaused = heroVideo.earlyMotion?.detach() ?? null;
-delete heroVideo.earlyMotion;
-let autoplayBlocked = false;
-let heroInView = true;
-let playRequest = 0;
-let autoplayRetryTimer = null;
-let autoplayRetryAttempt = 0;
-const autoplayRetryDelays = [250, 750, 1500, 3000];
+// Only the visitor's own button press pauses motion; a browser refusal never counts as a choice.
+let userPaused = false;
 let lastReelTrigger;
-function shouldPauseMotion() {
-  return (motionPaused ?? reducedMotion.matches) || !heroInView || document.hidden || reelDialog.open;
+
+// Add ?motiondebug to the address to see on the page why background motion did or did not start.
+const motionDebug = (() => {
+  if (!new URLSearchParams(location.search).has('motiondebug')) return Object.assign(() => {}, {active:false});
+  const panel = document.createElement('pre');
+  panel.dataset.motionDebug = '';
+  panel.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:45vh;overflow:auto;margin:0;padding:8px 10px;z-index:100;background:#000000d9;color:#9dff8a;font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere';
+  panel.textContent = 'MOTION DEBUG — tap this box to copy\n';
+  panel.addEventListener('click', () => {
+    if (navigator.clipboard) navigator.clipboard.writeText(panel.textContent).catch(() => {});
+    getSelection().selectAllChildren(panel);
+  });
+  document.body.append(panel);
+  return Object.assign(message => { panel.textContent += `+${Math.round(performance.now())}ms ${message}\n`; panel.scrollTop = panel.scrollHeight; }, {active:true});
+})();
+const motionState = () => `paused=${heroVideo.paused} ready=${heroVideo.readyState} net=${heroVideo.networkState} t=${heroVideo.currentTime.toFixed(2)}`;
+if (motionDebug.active) {
+  motionDebug(navigator.userAgent);
+  motionDebug(`reduced-motion=${reducedMotion.matches} hidden=${document.hidden} save-data=${navigator.connection?.saveData ?? 'n/a'} autoplay-attr=${heroVideo.hasAttribute('autoplay')} muted=${heroVideo.muted} ${motionState()}`);
+  ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'play', 'playing', 'pause', 'waiting', 'stalled', 'suspend', 'emptied', 'abort'].forEach(type => heroVideo.addEventListener(type, () => motionDebug(`${type} ${motionState()}`)));
+  const framesAdvancing = () => { if (heroVideo.currentTime > 0) { motionDebug(`frames advancing ${motionState()}`); heroVideo.removeEventListener('timeupdate', framesAdvancing); } };
+  heroVideo.addEventListener('timeupdate', framesAdvancing);
+  // iOS 27 Safari never fetches a video when Accessibility > Motion > Auto-Play Video Previews is off; only a tap can start it.
+  setTimeout(() => { if (heroVideo.networkState === 0 && heroVideo.readyState === 0) motionDebug('VERDICT: browser never started loading the video — it is waiting for a tap. On iPhone check Settings > Accessibility > Motion > Auto-Play Video Previews.'); }, 2000);
 }
+
+function wantsMotion() { return !userPaused && !document.hidden && !reelDialog.open; }
 function updateMotionLabel() {
-  const paused = shouldPauseMotion() || autoplayBlocked || heroVideo.paused;
-  document.body.classList.toggle('motion-paused', paused);
+  const paused = heroVideo.paused;
+  // The button also stops the marquee, but only when the visitor asked for it.
+  document.body.classList.toggle('motion-paused', userPaused);
   motionButton.setAttribute('aria-pressed', String(paused));
   motionButton.setAttribute('aria-label', paused ? 'Play background motion' : 'Pause background motion');
   motionButton.querySelector('.motion-label').textContent = paused ? 'Play motion' : 'Pause motion';
   motionButton.querySelector('.motion-icon').textContent = paused ? '▶' : 'Ⅱ';
 }
-function cancelAutoplayRetry() {
-  clearTimeout(autoplayRetryTimer);
-  autoplayRetryTimer = null;
+function startMotion(reason) {
+  if (!wantsMotion() || !heroVideo.paused) return;
+  heroVideo.muted = true;
+  heroVideo.play().then(() => motionDebug(`play(${reason}) allowed`), error => { motionDebug(`play(${reason}) refused — ${error.name}: ${error.message}`); updateMotionLabel(); });
 }
-function queueAutoplayRetry() {
-  // Recover a temporary native pause without looping against a browser policy.
-  if (autoplayRetryTimer !== null || shouldPauseMotion() || !heroVideo.paused || heroVideo.error || autoplayRetryAttempt >= autoplayRetryDelays.length) return;
-  autoplayRetryTimer = setTimeout(() => {
-    autoplayRetryTimer = null;
-    if (!shouldPauseMotion() && heroVideo.paused) applyMotion();
-  }, autoplayRetryDelays[autoplayRetryAttempt++]);
-}
-function refreshMotion() {
-  cancelAutoplayRetry();
-  autoplayRetryAttempt = 0;
-  applyMotion();
-}
-function applyMotion() {
-  const request = ++playRequest;
-  const stop = shouldPauseMotion();
-  // Native inline autoplay and play() work together; deliberate pauses disable both.
-  heroVideo.autoplay = !stop;
-  if (stop) { cancelAutoplayRetry(); heroVideo.pause(); }
-  else {
-    heroVideo.muted = true;
-    heroVideo.play().catch(error => {
-      if (request !== playRequest || shouldPauseMotion()) return;
-      // A browser refusal is not a user pause. Allow a later readiness/restore retry.
-      autoplayBlocked = error.name !== 'AbortError';
-      updateMotionLabel();
-      queueAutoplayRetry();
-    });
-  }
+function syncMotion(reason) {
+  if (wantsMotion()) startMotion(reason);
+  else heroVideo.pause();
   updateMotionLabel();
 }
-motionButton.addEventListener('click', () => {
-  motionPaused = !(motionPaused || autoplayBlocked || heroVideo.paused);
-  autoplayBlocked = false;
-  refreshMotion();
-});
-heroVideo.addEventListener('playing', () => {
-  if (shouldPauseMotion()) { heroVideo.pause(); return; }
-  cancelAutoplayRetry();
-  autoplayBlocked = false;
-  updateMotionLabel();
-});
-heroVideo.addEventListener('pause', () => {
-  updateMotionLabel();
-  queueAutoplayRetry();
-});
-function resumeMotionWhenReady() {
-  if (!shouldPauseMotion() && heroVideo.paused) applyMotion();
+motionButton.addEventListener('click', () => { userPaused = !heroVideo.paused; syncMotion('button'); });
+heroVideo.addEventListener('play', updateMotionLabel);
+heroVideo.addEventListener('pause', updateMotionLabel);
+heroVideo.addEventListener('error', () => { motionDebug(`error code=${heroVideo.error?.code} ${heroVideo.error?.message ?? ''}`); updateMotionLabel(); });
+
+// If a phone refuses autoplay (Low Power Mode, an in-app browser), the first tap or key press anywhere starts it.
+const unlockEvents = ['touchend', 'click', 'keydown'];
+function unlockMotion(event) {
+  if (event.target.closest?.('#motion-toggle, [data-open-reel], [data-motion-debug]')) return;
+  startMotion(event.type);
 }
-heroVideo.addEventListener('loadeddata', resumeMotionWhenReady);
-heroVideo.addEventListener('canplay', resumeMotionWhenReady);
-window.addEventListener('pageshow', refreshMotion);
-reducedMotion.addEventListener('change', () => {
-  if (motionPaused !== true) motionPaused = null;
-  refreshMotion();
-});
+unlockEvents.forEach(type => document.addEventListener(type, unlockMotion, {capture:true, passive:true}));
+heroVideo.addEventListener('playing', () => unlockEvents.forEach(type => document.removeEventListener(type, unlockMotion, {capture:true})), {once:true});
+
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { reelPlayer.pause(); applyMotion(); }
-  else refreshMotion();
+  if (document.hidden) reelPlayer.pause();
+  syncMotion('visibility');
 });
+// A page restored from the back/forward cache comes back paused.
+window.addEventListener('pageshow', event => { if (event.persisted) syncMotion('pageshow'); });
 document.querySelectorAll('[data-open-reel]').forEach(trigger => trigger.addEventListener('click', () => {
   lastReelTrigger = trigger;
   reelDialog.showModal();
   document.body.classList.add('modal-open');
-  applyMotion();
+  syncMotion('reel-open');
   reelPlayer.play().catch(() => {});
 }));
 function closeReel() { reelDialog.close(); }
@@ -141,17 +122,17 @@ reelDialog.addEventListener('click', event => {
 reelDialog.addEventListener('close', () => {
   reelPlayer.pause();
   document.body.classList.remove('modal-open');
-  refreshMotion();
+  syncMotion('reel-close');
   lastReelTrigger?.focus({preventScroll:true});
 });
 document.querySelector('#reel-inquire').addEventListener('click', () => {
   closeReel();
   document.querySelector('#inquire').scrollIntoView({behavior:reducedMotion.matches ? 'auto' : 'smooth'});
 });
-applyMotion();
-new IntersectionObserver(entries => {
-  const wasInView = heroInView;
-  heroInView = entries[0].isIntersecting;
-  if (heroInView && !wasInView) refreshMotion();
-  else applyMotion();
-}, {threshold:0}).observe(heroVideo);
+
+// The autoplay attribute leads. A scripted play() backs it up straight away (it also starts loading when the browser
+// has not begun on its own) and again once metadata arrives, so the debug log records any refusal and its reason.
+if (!wantsMotion()) heroVideo.pause();
+startMotion('init');
+heroVideo.addEventListener('loadedmetadata', () => startMotion('loadedmetadata'), {once:true});
+updateMotionLabel();
