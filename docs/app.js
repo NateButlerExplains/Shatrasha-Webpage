@@ -31,7 +31,7 @@ document.querySelector('#copy-inquiry').addEventListener('click', async () => {
 form.addEventListener('input', () => { document.querySelector('#inquiry-result').hidden = true; });
 form.addEventListener('change', () => { document.querySelector('#inquiry-result').hidden = true; });
 
-// Background motion: native muted autoplay, one visible control, first-touch fallback.
+// Background motion: native muted autoplay, one visible control, first-touch fallback, Safari video-as-image fallback.
 const heroVideo = document.querySelector('#hero-video');
 const motionButton = document.querySelector('#motion-toggle');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -40,6 +40,10 @@ const reelPlayer = document.querySelector('#reel-player');
 // Only the visitor's own button press pauses motion; a browser refusal never counts as a choice.
 let userPaused = false;
 let lastReelTrigger;
+// When Safari refuses play(), the same MP4 goes into a <picture>. Safari decodes it through its image pipeline, which no
+// autoplay setting gates, and loops it. Other browsers skip the mp4 source, load the JPG, and the picture is removed again.
+let heroPicture = null;
+let imageMotion = false;
 
 // Add ?motiondebug to the address to see on the page why background motion did or did not start.
 const motionDebug = (() => {
@@ -55,7 +59,7 @@ const motionDebug = (() => {
   document.body.append(panel);
   return Object.assign(message => { panel.textContent += `+${Math.round(performance.now())}ms ${message}\n`; panel.scrollTop = panel.scrollHeight; }, {active:true});
 })();
-const motionState = () => `paused=${heroVideo.paused} ready=${heroVideo.readyState} net=${heroVideo.networkState} t=${heroVideo.currentTime.toFixed(2)}`;
+const motionState = () => `paused=${heroVideo.paused} ready=${heroVideo.readyState} net=${heroVideo.networkState} t=${heroVideo.currentTime.toFixed(2)} picture=${imageMotion ? 'engaged' : heroPicture ? 'pending' : 'none'}`;
 if (motionDebug.active) {
   motionDebug(navigator.userAgent);
   motionDebug(`reduced-motion=${reducedMotion.matches} hidden=${document.hidden} save-data=${navigator.connection?.saveData ?? 'n/a'} autoplay-attr=${heroVideo.hasAttribute('autoplay')} muted=${heroVideo.muted} ${motionState()}`);
@@ -63,12 +67,12 @@ if (motionDebug.active) {
   const framesAdvancing = () => { if (heroVideo.currentTime > 0) { motionDebug(`frames advancing ${motionState()}`); heroVideo.removeEventListener('timeupdate', framesAdvancing); } };
   heroVideo.addEventListener('timeupdate', framesAdvancing);
   // iOS 27 Safari never fetches a video when Accessibility > Motion > Auto-Play Video Previews is off; only a tap can start it.
-  setTimeout(() => { if (heroVideo.networkState === 0 && heroVideo.readyState === 0) motionDebug('VERDICT: browser never started loading the video — it is waiting for a tap. On iPhone check Settings > Accessibility > Motion > Auto-Play Video Previews.'); }, 2000);
+  setTimeout(() => { if (heroVideo.networkState === 0 && heroVideo.readyState === 0 && !imageMotion) motionDebug(heroPicture ? 'VERDICT: browser never started loading the video; <picture> fallback still loading.' : 'VERDICT: browser never started loading the video — it is waiting for a tap. On iPhone check Settings > Accessibility > Motion > Auto-Play Video Previews.'); }, 2000);
 }
 
 function wantsMotion() { return !userPaused && !document.hidden && !reelDialog.open; }
 function updateMotionLabel() {
-  const paused = heroVideo.paused;
+  const paused = imageMotion ? userPaused : heroVideo.paused;
   // The button also stops the marquee, but only when the visitor asked for it.
   document.body.classList.toggle('motion-paused', userPaused);
   motionButton.setAttribute('aria-pressed', String(paused));
@@ -77,16 +81,17 @@ function updateMotionLabel() {
   motionButton.querySelector('.motion-icon').textContent = paused ? '▶' : 'Ⅱ';
 }
 function startMotion(reason) {
-  if (!wantsMotion() || !heroVideo.paused) return;
+  if (imageMotion || !wantsMotion() || !heroVideo.paused) return;
   heroVideo.muted = true;
-  heroVideo.play().then(() => motionDebug(`play(${reason}) allowed`), error => { motionDebug(`play(${reason}) refused — ${error.name}: ${error.message}`); updateMotionLabel(); });
+  heroVideo.play().then(() => motionDebug(`play(${reason}) allowed`), error => { motionDebug(`play(${reason}) refused — ${error.name}: ${error.message}`); if (error.name === 'NotAllowedError') engageImageMotion(); updateMotionLabel(); });
 }
 function syncMotion(reason) {
+  if (heroPicture) heroPicture.hidden = !wantsMotion();
   if (wantsMotion()) startMotion(reason);
   else heroVideo.pause();
   updateMotionLabel();
 }
-motionButton.addEventListener('click', () => { userPaused = !heroVideo.paused; syncMotion('button'); });
+motionButton.addEventListener('click', () => { userPaused = imageMotion ? !userPaused : !heroVideo.paused; syncMotion('button'); });
 heroVideo.addEventListener('play', updateMotionLabel);
 heroVideo.addEventListener('pause', updateMotionLabel);
 heroVideo.addEventListener('error', () => { motionDebug(`error code=${heroVideo.error?.code} ${heroVideo.error?.message ?? ''}`); updateMotionLabel(); });
@@ -98,7 +103,31 @@ function unlockMotion(event) {
   startMotion(event.type);
 }
 unlockEvents.forEach(type => document.addEventListener(type, unlockMotion, {capture:true, passive:true}));
-heroVideo.addEventListener('playing', () => unlockEvents.forEach(type => document.removeEventListener(type, unlockMotion, {capture:true})), {once:true});
+function removeUnlock() { unlockEvents.forEach(type => document.removeEventListener(type, unlockMotion, {capture:true})); }
+heroVideo.addEventListener('playing', removeUnlock, {once:true});
+
+function engageImageMotion() {
+  if (heroPicture) return;
+  heroPicture = document.createElement('picture');
+  heroPicture.innerHTML = '<source srcset="assets/speaker-hero.mp4" type="video/mp4"><img src="assets/reel-poster.jpg" alt="" decoding="async">';
+  const img = heroPicture.querySelector('img');
+  const dropPicture = why => { motionDebug(`picture ${why} — removed; tap-to-start stays`); heroPicture?.remove(); heroPicture = null; };
+  img.addEventListener('load', () => {
+    const name = img.currentSrc.split('/').pop();
+    motionDebug(`picture load currentSrc=${name} ${img.naturalWidth}×${img.naturalHeight}`);
+    if (!heroVideo.paused) return dropPicture('unneeded, <video> started meanwhile');
+    if (!name.endsWith('.mp4') || !img.naturalWidth) return dropPicture('is the still JPG (browser skipped the mp4 source)');
+    imageMotion = true;
+    document.body.dataset.imageMotion = 'true';
+    removeUnlock();
+    syncMotion('picture');
+    motionDebug('VERDICT: image path engaged — animation cannot be detected from JS; look at the screen.');
+  });
+  img.addEventListener('error', () => dropPicture('error'));
+  heroPicture.hidden = !wantsMotion();
+  heroVideo.after(heroPicture);
+  motionDebug('fallback engaged: <picture> with mp4 source inserted (Safari video-as-image)');
+}
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) reelPlayer.pause();

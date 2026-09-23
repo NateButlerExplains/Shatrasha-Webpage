@@ -38,6 +38,6 @@ The original instrumental bed and transition sounds were synthesized locally for
 
 ## Muted background motion
 
-`docs/assets/speaker-hero.mp4` remains the separate 23.023-second, 720p silent background loop. Its selected recordings are MVI_1704, MVI_1703, MVI_1700, MVI_1394, MVI_1392, MVI_1507, MVI_1518, and MVI_1457. The hero keeps its mute, inline autoplay, and manual-pause behavior; it plays for every visitor regardless of Reduce Motion, and starts on the first tap anywhere if a device refuses autoplay (see README). It continues using `reel-poster.jpg`.
+`docs/assets/speaker-hero.mp4` remains the separate 23.023-second, 720p silent background loop. Its selected recordings are MVI_1704, MVI_1703, MVI_1700, MVI_1394, MVI_1392, MVI_1507, MVI_1518, and MVI_1457. The hero keeps its mute, inline autoplay, and manual-pause behavior; it plays for every visitor regardless of Reduce Motion, and when Safari refuses autoplay the same file is shown through Safari's video-as-image `<picture>` path so it still loops without a tap; other browsers fall back to the first tap anywhere (see README). It continues using `reel-poster.jpg`.
 
 Full originals and detailed edit records are retained outside this deployment repository.
